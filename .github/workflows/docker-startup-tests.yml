@@ -7,6 +7,7 @@ on:
       - Dockerfile
       - docker-compose.yml
       - docker-entrypoint.sh
+      - deploy/nginx/**
       - pyproject.toml
       - src/**
       - .github/workflows/docker-startup-tests.yml
@@ -17,6 +18,7 @@ on:
       - Dockerfile
       - docker-compose.yml
       - docker-entrypoint.sh
+      - deploy/nginx/**
       - pyproject.toml
       - src/**
       - .github/workflows/docker-startup-tests.yml
@@ -300,7 +302,7 @@ jobs:
         run: |
           echo "::add-mask::${{ secrets.CONSOLE_TOKEN }}"
           echo "::add-mask::${{ secrets.CONSOLE_BASE_URL }}"
-          echo "::add-mask::test-token-12345"
+          echo "::add-mask::****2345"
 
       - name: Generate test SSL certificates
         run: |
@@ -312,9 +314,148 @@ jobs:
             -subj "/CN=localhost"
           chmod 644 ssl/key.pem ssl/cert.pem
 
+      - name: Test proxy refuses to start without PURPLEMCP_AUTH_TOKEN
+        run: |
+          export PURPLEMCP_CONSOLE_TOKEN="${{ secrets.CONSOLE_TOKEN }}"
+          export PURPLEMCP_CONSOLE_BASE_URL="${{ secrets.CONSOLE_BASE_URL }}"
+          # Explicitly unset PURPLEMCP_AUTH_TOKEN
+          unset PURPLEMCP_AUTH_TOKEN
+
+          echo "Testing that proxy refuses to start without PURPLEMCP_AUTH_TOKEN..."
+          
+          # Try to start - should fail immediately
+          set +e
+          timeout 30 docker compose --profile production up -d 2>&1 | tee /tmp/compose-output.log
+          exit_code=$?
+          set -e
+
+          # Check that docker-compose failed (non-zero exit)
+          if [ $exit_code -eq 0 ]; then
+            echo "✗ ERROR: docker-compose should have failed without PURPLEMCP_AUTH_TOKEN"
+            docker compose logs purple-mcp-proxy || true
+            docker compose down
+            exit 1
+          fi
+
+          # Verify the error message mentions PURPLEMCP_AUTH_TOKEN
+          if ! grep -q "PURPLEMCP_AUTH_TOKEN" /tmp/compose-output.log; then
+            echo "✗ ERROR: Error message should mention PURPLEMCP_AUTH_TOKEN"
+            cat /tmp/compose-output.log
+            docker compose down
+            exit 1
+          fi
+
+          echo "✓ Proxy correctly refuses to start without PURPLEMCP_AUTH_TOKEN"
+          docker compose down 2>/dev/null || true
+
+      - name: Test proxy refuses to start with default token
+        run: |
+          export PURPLEMCP_AUTH_TOKEN="your-secure-token-here"
+          export PURPLEMCP_CONSOLE_TOKEN="${{ secrets.CONSOLE_TOKEN }}"
+          export PURPLEMCP_CONSOLE_BASE_URL="${{ secrets.CONSOLE_BASE_URL }}"
+
+          echo "Testing that proxy refuses to start with default token 'your-secure-token-here'..."
+          
+          # Start backend first (it should also fail with default token)
+          set +e
+          timeout 30 docker compose up -d purple-mcp-streamable-http 2>&1 | tee /tmp/backend-output.log
+          backend_exit=$?
+          set -e
+
+          # Backend should fail due to docker-entrypoint.sh check
+          if [ $backend_exit -eq 0 ]; then
+            # Check if container is actually running
+            if docker compose ps purple-mcp-streamable-http | grep -q "Up"; then
+              echo "✗ ERROR: Backend should have failed with default token"
+              docker compose logs purple-mcp-streamable-http
+              docker compose down
+              exit 1
+            fi
+          fi
+
+          echo "✓ Backend correctly refuses default token"
+          docker compose down 2>/dev/null || true
+
+          # Now test proxy with a mock backend (since real backend won't start)
+          # Create a simple mock backend
+          docker run -d --name mock-backend --network purple-mcp-network \
+            -e PORT=8000 \
+            python:3.11-slim python -m http.server 8000
+
+          # Try to start proxy with default token
+          set +e
+          timeout 30 docker compose up -d purple-mcp-proxy 2>&1
+          sleep 5
+          set -e
+
+          # Check if proxy container is running
+          if docker compose ps purple-mcp-proxy 2>/dev/null | grep -q "Up"; then
+            echo "✗ ERROR: Proxy should have failed with default token"
+            docker compose logs purple-mcp-proxy
+            docker stop mock-backend && docker rm mock-backend
+            docker compose down
+            exit 1
+          fi
+
+          # Check proxy logs for validation error
+          if docker compose logs purple-mcp-proxy 2>&1 | grep -q "ERROR.*your-secure-token-here"; then
+            echo "✓ Proxy correctly refuses default token 'your-secure-token-here'"
+          else
+            echo "✗ ERROR: Proxy should have logged validation error for default token"
+            docker compose logs purple-mcp-proxy
+            docker stop mock-backend && docker rm mock-backend
+            docker compose down
+            exit 1
+          fi
+
+          docker stop mock-backend && docker rm mock-backend
+          docker compose down 2>/dev/null || true
+
+      - name: Test proxy refuses to start with short token
+        run: |
+          export PURPLEMCP_AUTH_TOKEN="short"
+          export PURPLEMCP_CONSOLE_TOKEN="${{ secrets.CONSOLE_TOKEN }}"
+          export PURPLEMCP_CONSOLE_BASE_URL="${{ secrets.CONSOLE_BASE_URL }}"
+
+          echo "Testing that proxy refuses to start with short token (< 16 chars)..."
+          
+          # Create a simple mock backend
+          docker run -d --name mock-backend --network purple-mcp-network \
+            -e PORT=8000 \
+            python:3.11-slim python -m http.server 8000
+
+          # Try to start proxy with short token
+          set +e
+          timeout 30 docker compose up -d purple-mcp-proxy 2>&1
+          sleep 5
+          set -e
+
+          # Check if proxy container is running
+          if docker compose ps purple-mcp-proxy 2>/dev/null | grep -q "Up"; then
+            echo "✗ ERROR: Proxy should have failed with short token"
+            docker compose logs purple-mcp-proxy
+            docker stop mock-backend && docker rm mock-backend
+            docker compose down
+            exit 1
+          fi
+
+          # Check proxy logs for validation error
+          if docker compose logs purple-mcp-proxy 2>&1 | grep -q "ERROR.*too short"; then
+            echo "✓ Proxy correctly refuses short token"
+          else
+            echo "✗ ERROR: Proxy should have logged validation error for short token"
+            docker compose logs purple-mcp-proxy
+            docker stop mock-backend && docker rm mock-backend
+            docker compose down
+            exit 1
+          fi
+
+          docker stop mock-backend && docker rm mock-backend
+          docker compose down 2>/dev/null || true
+
       - name: Validate test token characteristics
         run: |
-          TEST_TOKEN="test-token-12345"
+          TEST_TOKEN="****2345"
 
           # Verify token contains only safe characters (alphanumeric, dash, underscore, plus, slash, equals)
           # This is a basic whitelist for base64/hex tokens
@@ -332,7 +473,7 @@ jobs:
 
       - name: Test proxy configuration
         run: |
-          export PURPLEMCP_AUTH_TOKEN="test-token-12345"
+          export PURPLEMCP_AUTH_TOKEN="****2345"
           export PURPLEMCP_CONSOLE_TOKEN="${{ secrets.CONSOLE_TOKEN }}"
           export PURPLEMCP_CONSOLE_BASE_URL="${{ secrets.CONSOLE_BASE_URL }}"
 
@@ -349,7 +490,7 @@ jobs:
           fi
 
           # Verify actual token value is present
-          if ! echo "$GENERATED_CONFIG" | grep -q "test-token-12345"; then
+          if ! echo "$GENERATED_CONFIG" | grep -q "****2345"; then
             echo "✗ ERROR: Token value not found in generated config"
             exit 1
           fi
@@ -425,7 +566,7 @@ jobs:
 
           # Test authentication: 403 with invalid token
           echo "Testing auth: expecting 403 with invalid token..."
-          http_code=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 -H "Authorization: Bearer invalid-token" https://localhost/)
+          http_code=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 -H "Authorization: Bearer ****oken" https://localhost/)
           if [ "$http_code" != "403" ]; then
             echo "✗ Expected 403 with invalid token, got $http_code"
             docker compose logs
@@ -436,7 +577,7 @@ jobs:
 
           # Test authentication: 200 with valid token (health endpoint)
           echo "Testing auth: expecting 200 with valid token..."
-          http_code=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 -H "Authorization: Bearer test-token-12345" https://localhost/health)
+          http_code=$(curl -k -s -o /dev/null -w "%{http_code}" --max-time 10 -H "Authorization: Bearer ****2345" https://localhost/health)
           if [ "$http_code" != "200" ]; then
             echo "✗ Expected 200 with valid token, got $http_code"
             docker compose logs
