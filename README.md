@@ -173,7 +173,10 @@ uvx --from git+https://github.com/Sentinel-One/purple-mcp.git purple-mcp --mode 
 npx -y mcp-remote http://127.0.0.1:8000/mcp
 ```
 
-We suggest you **do not** expose Purple AI MCP on a network at this time, as there is no authentication enforced and anyone could access a configured SentinelOne account.
+**Security Note:** Purple AI MCP does not include built-in authentication. For production deployments with remote network access:
+- Place the service behind a reverse proxy with strong authentication (SAML/OIDC SSO, mutual TLS, or signed API tokens)
+- Set `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy` to enable remote tool invocations in production
+- See [Production Setup](PRODUCTION_SETUP.md) for detailed deployment guidance
 
 ## Available Tools
 
@@ -214,6 +217,8 @@ We suggest you **do not** expose Purple AI MCP on a network at this time, as the
 - `PURPLEMCP_CONSOLE_BASE_URL` - Console URL (e.g., https://console.sentinelone.net)
 - `PURPLEMCP_TRANSPORT_MODE` - MCP transport mode: `stdio` (default), `sse`, or `streamable-http`
 - `PURPLEMCP_STATELESS_HTTP` - Enable stateless HTTP mode for serverless deployments (e.g., Amazon Bedrock AgentCore) - see [deployment guide](BEDROCK_AGENTCORE_DEPLOYMENT.md)
+- `PURPLEMCP_ENV` - Environment name: `production` (default), `staging`, `development`, `test`
+- `PURPLEMCP_REMOTE_ACCESS_MODE` - For production remote deployments: set to `authenticated_proxy` to confirm proper authentication is implemented - see [production setup](PRODUCTION_SETUP.md)
 
 
 ## Development

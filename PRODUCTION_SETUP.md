@@ -43,10 +43,16 @@ PURPLEMCP_CONSOLE_TOKEN=your_service_token
 PURPLEMCP_CONSOLE_BASE_URL=https://your-console.sentinelone.net
 PURPLEMCP_AUTH_TOKEN=$(openssl rand -hex 32)
 PURPLEMCP_ENV=production
+PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy
 EOF
 
 chmod 600 .env
 ```
+
+**Important Security Note:**
+- `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy` is required for production deployments with remote access
+- This setting confirms that you have implemented proper authentication at the reverse proxy layer
+- Without this setting, remote tool invocations will be blocked in production to prevent unauthenticated access
 
 ### 2. Generate SSL certificates
 
@@ -158,7 +164,7 @@ docker compose logs purple-mcp-proxy | grep "Unauthorized"
 docker compose logs -f purple-mcp-proxy | grep -E "Unauthorized|Forbidden"
 
 # Verify token validation is working (should be rejected)
-curl -k -H "Authorization: Bearer invalid-token" https://localhost/
+curl -k -H "Authorization: Bearer ****oken" https://localhost/
 
 # Verify correct token is accepted
 TOKEN=$(grep PURPLEMCP_AUTH_TOKEN .env | cut -d= -f2)

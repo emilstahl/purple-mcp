@@ -7,7 +7,7 @@ This guide documents the security expectations for every contributor and operato
 ## Security Ownership and Shared Responsibility
 
 - **Project maintainers** provide secure-by-default libraries, tools, and configuration primitives.
-- **Operators and deployers** are responsible for securing runtime environments, network boundaries, secrets, observability pipelines, and user access.
+- **Operators and deployers** are responsible for securing runtime environments, network boundaries, secrets, ****lity pipelines, and user access.
 - **Users running Purple MCP as a remote service** must place the instance behind a reverse proxy (for example, Nginx, Envoy, or an API gateway) that enforces strong authentication and authorization. Purple MCP does not ship its own auth layer. All external-facing deployments require operator-managed network controls and authentication.
 
 ## Threat Model Overview
@@ -55,10 +55,16 @@ This guide documents the security expectations for every contributor and operato
 ## Authentication, Authorization, and Access Control
 
 - Purple MCP has **no built-in authentication or session management**. Treat every tool invocation as fully trusted by the caller.
+- **Remote Access Security Controls**: To prevent unauthenticated remote tool invocations in production:
+  - Production deployments with remote transport (HTTP/SSE) require setting `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy`
+  - This environment variable confirms that the service is behind an authenticated reverse proxy
+  - Without this setting, remote tool invocations will be blocked in production environments
+  - Local stdio mode is always permitted (no remote network access)
 - When deploying as a remote or shared service:
   - Terminate TLS at a reverse proxy that enforces strong client authentication (SAML/OIDC SSO, mutual TLS, signed API tokens).
   - Implement rate limiting, audit logging, and IP allowlists at the proxy layer.
   - Restrict network access to SentinelOne control planes and internal assets required by your workflows.
+  - Set `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy` to acknowledge proper authentication is in place.
 - Document all access paths and routinely review who can reach the MCP instance. The operator bears full responsibility for access control.
 
 ## Deployment Guidance
@@ -73,10 +79,11 @@ This guide documents the security expectations for every contributor and operato
 ### Self-Hosted Remote Service
 
 - Place MCP behind a reverse proxy with authentication, request filtering, and TLS termination. The proxy must require valid user identity before forwarding MCP traffic.
+- **Set `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy`** to confirm proper authentication is implemented and enable remote tool invocations in production.
 - Segment the MCP host within a dedicated subnet or VPC and restrict inbound traffic to the proxy layer.
 - Run the service under least-privilege OS accounts. Configure systemd, container runtimes, or orchestration platforms with read-only file systems where feasible.
 - Rotate credentials frequently, monitor token usage, and store secrets in hardened secret stores.
-- Ensure observability pipelines (logs, traces, metrics) comply with data handling policies.
+- Ensure ****lity pipelines (logs, traces, metrics) comply with data handling policies.
 
 ### Containerized or Orchestrated Deployments
 
@@ -120,6 +127,7 @@ This guide documents the security expectations for every contributor and operato
 
 - Environment variables validated; TLS verification enabled in production.
 - Reverse proxy authentication confirmed and documented.
+- `PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy` set for production remote deployments.
 - Secrets sourced from approved secret stores; no hardcoded credentials.
 - Logging remains sanitized; debug flags disabled.
 - Dependencies scanned and synchronized.

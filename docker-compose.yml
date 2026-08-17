@@ -15,6 +15,9 @@ services:
       # Optional: Observability
       PURPLEMCP_ENV: ${PURPLEMCP_ENV:-production}
       PURPLEMCP_LOGFIRE_TOKEN: ${PURPLEMCP_LOGFIRE_TOKEN:-}
+      
+      # Optional: Remote access mode (required for production with remote transport)
+      PURPLEMCP_REMOTE_ACCESS_MODE: ${PURPLEMCP_REMOTE_ACCESS_MODE:-}
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -50,6 +53,9 @@ services:
       # Optional: Observability
       PURPLEMCP_ENV: ${PURPLEMCP_ENV:-production}
       PURPLEMCP_LOGFIRE_TOKEN: ${PURPLEMCP_LOGFIRE_TOKEN:-}
+      
+      # Optional: Remote access mode (required for production with remote transport)
+      PURPLEMCP_REMOTE_ACCESS_MODE: ${PURPLEMCP_REMOTE_ACCESS_MODE:-}
     ports:
       - "8001:8000"
     restart: unless-stopped

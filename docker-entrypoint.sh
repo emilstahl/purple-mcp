@@ -51,6 +51,21 @@ esac
 if [ "$ALLOW_REMOTE_ACCESS" = "true" ]; then
     echo "WARNING: Purple MCP is binding to non-loopback address ($MCP_HOST) without built-in authentication." >&2
     echo "For production deployments, ensure this service runs behind a reverse proxy or load balancer." >&2
+    echo "" >&2
+    
+    # Check if PURPLEMCP_REMOTE_ACCESS_MODE is set for production environments
+    PURPLEMCP_ENV="${PURPLEMCP_ENV:-production}"
+    if [ "$PURPLEMCP_ENV" = "production" ] || [ "$PURPLEMCP_ENV" = "prod" ]; then
+        if [ -z "${PURPLEMCP_REMOTE_ACCESS_MODE:-}" ]; then
+            echo "SECURITY NOTICE: Running in production with remote access." >&2
+            echo "Remote tool invocations will be BLOCKED unless you set:" >&2
+            echo "  PURPLEMCP_REMOTE_ACCESS_MODE=authenticated_proxy" >&2
+            echo "" >&2
+            echo "This confirms your service is behind an authenticated reverse proxy." >&2
+            echo "" >&2
+        fi
+    fi
+    
     echo "See: https://github.com/Sentinel-One/purple-mcp/blob/main/PRODUCTION_SETUP.md" >&2
     echo "" >&2
 fi

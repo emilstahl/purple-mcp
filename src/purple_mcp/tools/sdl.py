@@ -26,6 +26,7 @@ from purple_mcp.libs.sdl import (
     SDLQueryPriority,
     create_sdl_settings,
 )
+from purple_mcp.remote_access_security import validate_remote_tool_invocation
 
 # TEMPORARY: Using Optional[T] instead of T | None in this file for FastMCP compatibility.
 # FastMCP's current OpenAI function schema generation requires explicit Optional types to properly
@@ -146,6 +147,10 @@ async def powerquery(  # noqa: C901
 
     Returns:
         String representation of the query results
+
+    Raises:
+        RuntimeError: If remote tool invocation is not allowed in production without
+            proper authentication proxy configuration
     """
     # Validate settings are available
     try:
@@ -158,6 +163,14 @@ async def powerquery(  # noqa: C901
             f"Please ensure required environment variables are set: "
             f"{ENV_PREFIX}CONSOLE_TOKEN, {ENV_PREFIX}CONSOLE_BASE_URL. Error: {exc}"
         ) from exc
+
+    # Validate remote access security for this tool invocation
+    # This prevents unauthenticated remote execution of arbitrary SDL queries
+    validate_remote_tool_invocation(
+        transport_mode=settings.transport_mode,
+        environment=settings.environment,
+        tool_name="powerquery",
+    )
 
     # Log non-sensitive metadata at INFO level
     logger.info(

@@ -199,12 +199,22 @@ def _display_security_warning(host: str) -> None:
     Args:
         host: The host address being bound to
     """
+    from purple_mcp.remote_access_security import (
+        REMOTE_ACCESS_MODE_AUTHENTICATED_PROXY,
+        REMOTE_ACCESS_MODE_ENV,
+        get_remote_access_mode,
+    )
+
+    remote_access_mode = get_remote_access_mode()
+    env = os.getenv("PURPLEMCP_ENV", "production")
+
     click.echo("", err=True)
     click.echo("=" * 80, err=True)
     click.echo("WARNING: RUNNING IN REMOTE ACCESS MODE", err=True)
     click.echo("=" * 80, err=True)
     click.echo("", err=True)
     click.echo(f"  Binding to: {host}", err=True)
+    click.echo(f"  Environment: {env}", err=True)
     click.echo("", err=True)
     click.echo("  SECURITY RISKS:", err=True)
     click.echo("    - MCP server exposes unauthenticated HTTP/SSE interface", err=True)
@@ -212,11 +222,44 @@ def _display_security_warning(host: str) -> None:
     click.echo("    - Service tokens and credentials may be accessible", err=True)
     click.echo("    - Data exfiltration is possible if process has valid tokens", err=True)
     click.echo("", err=True)
-    click.echo("  RECOMMENDED PROTECTIONS:", err=True)
+    click.echo("  REQUIRED PROTECTIONS:", err=True)
+    click.echo("    - Run behind a reverse proxy with authentication (REQUIRED)", err=True)
+    click.echo("    - Use SAML/OIDC SSO, mutual TLS, or signed API tokens", err=True)
     click.echo("    - Use a firewall to restrict access to trusted IPs", err=True)
-    click.echo("    - Run behind a reverse proxy with authentication", err=True)
     click.echo("    - Use network policies to limit exposure", err=True)
     click.echo("    - Monitor for unexpected tool invocations", err=True)
+    click.echo("", err=True)
+
+    # Check if running in production without proper configuration
+    if env.lower() in ("production", "prod"):
+        if remote_access_mode != REMOTE_ACCESS_MODE_AUTHENTICATED_PROXY:
+            click.echo("  ⚠️  PRODUCTION SECURITY ENFORCEMENT:", err=True)
+            click.echo(
+                "    Remote tool invocations will be BLOCKED in production unless you",
+                err=True,
+            )
+            click.echo("    acknowledge that this service is behind an authenticated proxy.", err=True)
+            click.echo("", err=True)
+            click.echo("    To enable remote access in production, set:", err=True)
+            click.echo(
+                f"      {REMOTE_ACCESS_MODE_ENV}={REMOTE_ACCESS_MODE_AUTHENTICATED_PROXY}",
+                err=True,
+            )
+            click.echo("", err=True)
+            click.echo(
+                "    This confirms you have implemented proper authentication at the proxy layer.",
+                err=True,
+            )
+            click.echo("", err=True)
+        else:
+            click.echo("  ✓ Remote access mode: authenticated_proxy", err=True)
+            click.echo(
+                "    Ensure your reverse proxy enforces authentication for all requests.",
+                err=True,
+            )
+            click.echo("", err=True)
+
+    click.echo("  See: https://github.com/Sentinel-One/purple-mcp/blob/main/PRODUCTION_SETUP.md", err=True)
     click.echo("", err=True)
     click.echo("=" * 80, err=True)
     click.echo("", err=True)
